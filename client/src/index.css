@@ -1,0 +1,33 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary-500: #4F46E5;
+  --color-primary-600: #4338CA;
+  --color-secondary-500: #10B981;
+  --color-secondary-600: #059669;
+  --color-accent-300: #6EE7B7;
+  
+  --color-background: #F9FAFB;
+  --color-text-dark: #111827;
+  --color-text-light: #6B7280;
+}
+
+@layer base {
+  body {
+    @apply bg-[var(--color-background)] text-[var(--color-text-dark)] font-sans antialiased;
+  }
+}
+
+/* Glassmorphism utilities */
+.glass-card {
+  @apply bg-white/70 backdrop-blur-md border border-white/20 shadow-xl rounded-2xl;
+}
+
+/* Custom gradients */
+.bg-gradient-hero {
+  @apply bg-gradient-to-br from-[#4F46E5] via-[#4338CA] to-[#10B981];
+}
+
+.text-gradient {
+  @apply bg-clip-text text-transparent bg-gradient-to-r from-[#4F46E5] to-[#10B981];
+}

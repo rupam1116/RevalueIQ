@@ -1,0 +1,128 @@
+generator client {
+  provider = "prisma-client-py"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  clerkId   String   @unique
+  email     String   @unique
+  name      String?
+  role      Role     @default(USER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  products  Product[]
+  orders    Order[]
+}
+
+enum Role {
+  USER
+  ADMIN
+  REPAIR_SHOP
+  NGO
+}
+
+model Product {
+  id             String   @id @default(uuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id])
+  
+  images         String[] // Cloudinary URLs
+  brand          String
+  category       String
+  model          String
+  specifications Json?
+  purchaseYear   Int?
+  purchasePrice  Float?
+  description    String?
+  currentIssues  String?
+  
+  // AI Generated Fields
+  predictedPrice Float?
+  conditionScore Float?
+  recommendedAction Action?
+  
+  status         ProductStatus @default(PENDING_REVIEW)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  
+  damageReport   DamageReport?
+  order          Order?
+}
+
+enum Action {
+  REPAIR
+  SELL
+  REPLACE
+  DONATE
+  RECYCLE
+}
+
+enum ProductStatus {
+  PENDING_REVIEW
+  ANALYZED
+  LISTED_FOR_SALE
+  SOLD
+  DONATED
+  RECYCLED
+}
+
+model DamageReport {
+  id              String   @id @default(uuid())
+  productId       String   @unique
+  product         Product  @relation(fields: [productId], references: [id])
+  
+  detectedIssues  Json     // Computer vision output (scratches, cracks, etc.)
+  repairGuide     String?  // Generative AI repair guide
+  estimatedCost   Float?
+  repairTime      String?
+  requiredParts   String[]
+  maintenanceTips String?
+}
+
+model Order {
+  id          String   @id @default(uuid())
+  productId   String   @unique
+  product     Product  @relation(fields: [productId], references: [id])
+  
+  buyerId     String
+  buyer       User     @relation(fields: [buyerId], references: [id])
+  
+  amount      Float
+  status      OrderStatus @default(PENDING)
+  paymentId   String?  // Razorpay payment ID
+  createdAt   DateTime @default(now())
+}
+
+enum OrderStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+model RepairShop {
+  id          String   @id @default(uuid())
+  name        String
+  location    String
+  latitude    Float?
+  longitude   Float?
+  rating      Float    @default(0)
+  contactInfo String?
+  createdAt   DateTime @default(now())
+}
+
+model NGO {
+  id          String   @id @default(uuid())
+  name        String
+  location    String
+  latitude    Float?
+  longitude   Float?
+  contactInfo String?
+  createdAt   DateTime @default(now())
+}
