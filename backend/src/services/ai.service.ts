@@ -1,8 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import logger from '../logs/logger';
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
-
 export class AiService {
   /**
    * Analyzes an image of an electronic device and returns appraisal data
@@ -15,6 +13,8 @@ export class AiService {
     }
 
     try {
+      // Initialize Gemini only when called
+      const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
       const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
       
       const prompt = `

@@ -13,6 +13,10 @@ export class UploadService {
    * @returns The secure URL of the uploaded image
    */
   async uploadImage(fileBuffer: Buffer, folder: string = 'revalueiq_appraisals'): Promise<string> {
+    if (!process.env.CLOUDINARY_URL) {
+      throw new Error('CLOUDINARY_URL is not configured');
+    }
+
     return new Promise((resolve, reject) => {
       const uploadStream = cloudinary.uploader.upload_stream(
         { folder },
