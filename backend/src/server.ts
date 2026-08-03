@@ -6,11 +6,18 @@ import app from './app';
 import { connectDB } from './config/database';
 import logger from './logs/logger';
 
-const PORT = parseInt(process.env.PORT || '5000', 10);
+const PORT = parseInt(process.env.PORT || "5000", 10);
+
+logger.info(`PORT environment variable = ${process.env.PORT}`);
+logger.info(`Using PORT = ${PORT}`);
+
+if (Number.isNaN(PORT)) {
+    throw new Error(`Invalid PORT value: ${process.env.PORT}`);
+}
 
 // Start listening immediately to prevent Render timeout
-const server = app.listen(PORT, '0.0.0.0', () => {
-  logger.info(`Server running on port ${PORT}`);
+const server = app.listen(PORT, "0.0.0.0", () => {
+    logger.info(`Server listening on port ${PORT}`);
 });
 
 logger.info("Connecting to MongoDB...");
