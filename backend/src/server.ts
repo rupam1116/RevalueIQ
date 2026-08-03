@@ -6,11 +6,11 @@ import app from './app';
 import { connectDB } from './config/database';
 import logger from './logs/logger';
 
-const PORT = process.env.PORT || 5000;
+const PORT = parseInt(process.env.PORT || '5000', 10);
 
 // Start listening immediately to prevent Render timeout
-const server = app.listen(PORT, () => {
-  logger.info("Server listening on PORT", PORT);
+const server = app.listen(PORT, '0.0.0.0', () => {
+  logger.info(`Server running on port ${PORT}`);
 });
 
 logger.info("Connecting to MongoDB...");

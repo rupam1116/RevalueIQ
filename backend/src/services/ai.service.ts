@@ -9,7 +9,18 @@ export class AiService {
    */
   async analyzeDeviceImage(imageBuffer: Buffer, mimeType: string) {
     if (!process.env.GEMINI_API_KEY) {
-      throw new Error('GEMINI_API_KEY is not configured');
+      logger.warn('GEMINI_API_KEY is not configured. Returning mock appraisal data.');
+      return {
+        deviceName: "Mock Device (No AI)",
+        category: "Smartphone",
+        condition: "Good",
+        conditionDetails: "Mock condition details because AI key is missing.",
+        estimatedValue: 15000,
+        lowEstimate: 12000,
+        highEstimate: 18000,
+        recommendation: "Repair",
+        recommendationReason: "Mock recommendation reason."
+      };
     }
 
     try {

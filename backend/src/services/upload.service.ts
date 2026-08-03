@@ -14,7 +14,8 @@ export class UploadService {
    */
   async uploadImage(fileBuffer: Buffer, folder: string = 'revalueiq_appraisals'): Promise<string> {
     if (!process.env.CLOUDINARY_URL) {
-      throw new Error('CLOUDINARY_URL is not configured');
+      logger.warn('CLOUDINARY_URL is not configured. Returning mock image URL.');
+      return 'https://res.cloudinary.com/demo/image/upload/sample.jpg';
     }
 
     return new Promise((resolve, reject) => {

@@ -19,14 +19,10 @@ export const connectDB = async () => {
         resolve();
       } catch (error) {
         retryCount++;
-        logger.error(`Error connecting to MongoDB (Attempt ${retryCount}/${MAX_RETRIES}):`, error);
+        logger.error(`Error connecting to MongoDB (Attempt ${retryCount}):`, error);
         
-        if (retryCount >= MAX_RETRIES) {
-          logger.error('Max connection retries reached. Exiting...');
-          reject(error);
-        } else {
-          setTimeout(attemptConnection, 5000);
-        }
+        // Retry indefinitely in the background
+        setTimeout(attemptConnection, 5000);
       }
     };
 

@@ -57,7 +57,11 @@ app.use('/api/v1/support', supportRoutes);
 app.use('/api/v1/profile', profileRoutes);
 app.use('/api/v1/auth', authRoutes);
 
-// Health Check
+// Health Checks
+app.get('/', (req, res) => {
+  res.status(200).json({ status: 'running' });
+});
+
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok' });
 });
