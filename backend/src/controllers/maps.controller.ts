@@ -1,31 +1,30 @@
 import { Request, Response, NextFunction } from 'express';
+import { mapsService } from '../services/maps.service';
 
 export const searchRepairShops = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { location, product } = req.query;
+    
+    if (!location) {
+      return res.status(400).json({ error: 'Location is required' });
+    }
 
-    // Phase 1: Return mock shop data to preserve the UI
-    const mockShops = [
-      {
-        id: "mock-shop-1",
-        name: "Mock Authorized Service Center",
-        address: "123 Main St, " + (location || "City Center"),
-        rating: 4.8,
-        reviews: 120,
-        distance: "1.2 miles away",
-        phone: "(555) 123-4567",
-        website: "https://example.com",
-        directionsUrl: "https://google.com/maps",
-        specialties: [product || "Electronics", "Precision Repair"],
-        description: "A highly rated mock service center for Phase 1 architecture.",
-        isRealTime: true,
-        lat: 17.3850,
-        lng: 78.4867,
-        source: "Mock Data Phase 1"
-      }
-    ];
+    // 1. Geocode location
+    const coords = await mapsService.geocode(location as string);
+    
+    if (!coords) {
+      return res.status(404).json({ error: 'Location not found' });
+    }
 
-    res.status(200).json(mockShops);
+    // 2. Fetch real shops
+    const realShops = await mapsService.findRepairShops(coords.lat, coords.lon, 10000, product as string);
+
+    if (realShops.length === 0) {
+      // Fallback or empty state
+      return res.status(200).json([]);
+    }
+
+    res.status(200).json(realShops);
   } catch (error) {
     next(error);
   }

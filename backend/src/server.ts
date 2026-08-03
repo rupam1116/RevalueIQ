@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
+import mongoose from 'mongoose';
 import app from './app';
 import { connectDB } from './config/database';
 import logger from './logs/logger';
@@ -9,11 +10,8 @@ const PORT = process.env.PORT || 5000;
 
 const startServer = async () => {
   try {
-    try {
-      await connectDB();
-    } catch (dbError) {
-      logger.warn('Skipping MongoDB connection for Phase 1 as no URI was provided.');
-    }
+    // Strictly require DB connection for Phase 2
+    await connectDB();
     
     const server = app.listen(PORT, () => {
       logger.info(`Server is running on port ${PORT}`);
@@ -25,10 +23,10 @@ const startServer = async () => {
       server.close(() => {
         logger.info('HTTP server closed.');
         // If mongoose is connected, close it too
-        // mongoose.connection.close(false, () => {
-        //   logger.info('MongoDB connection closed.');
-        process.exit(0);
-        // });
+        mongoose.connection.close(false).then(() => {
+          logger.info('MongoDB connection closed.');
+          process.exit(0);
+        });
       });
     };
 

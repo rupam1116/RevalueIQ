@@ -3,12 +3,15 @@ import { deviceService } from '../services/device.service';
 
 export const analyzeDevice = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    // req.auth is provided by Clerk middleware verifyToken() if we enable it
-    // Using a fallback for Phase 1 if token is not passed from frontend yet
-    const userId = (req as any).auth?.userId || "guest-mobile-user";
+    // req.user is provided by Firebase Auth middleware verifyToken() if enabled
+    const userId = req.user?.uid || "guest-mobile-user";
+
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: 'No image provided' });
+    }
 
     // Controller remains thin. Delegates logic to Service.
-    const result = await deviceService.analyzeDeviceMock(userId);
+    const result = await deviceService.analyzeDevice(userId, req.file);
     
     res.status(200).json({ data: result });
   } catch (error) {
