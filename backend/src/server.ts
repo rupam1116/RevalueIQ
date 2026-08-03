@@ -15,9 +15,26 @@ const startServer = async () => {
       logger.warn('Skipping MongoDB connection for Phase 1 as no URI was provided.');
     }
     
-    app.listen(PORT, () => {
+    const server = app.listen(PORT, () => {
       logger.info(`Server is running on port ${PORT}`);
     });
+
+    // Graceful Shutdown
+    const shutdown = () => {
+      logger.info('SIGTERM/SIGINT received. Shutting down gracefully...');
+      server.close(() => {
+        logger.info('HTTP server closed.');
+        // If mongoose is connected, close it too
+        // mongoose.connection.close(false, () => {
+        //   logger.info('MongoDB connection closed.');
+        process.exit(0);
+        // });
+      });
+    };
+
+    process.on('SIGTERM', shutdown);
+    process.on('SIGINT', shutdown);
+    
   } catch (error) {
     logger.error('Failed to start server:', error);
     process.exit(1);
