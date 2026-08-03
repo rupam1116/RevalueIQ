@@ -10,9 +10,10 @@ const PORT = process.env.PORT || 5000;
 
 // Start listening immediately to prevent Render timeout
 const server = app.listen(PORT, () => {
-  logger.info(`Server running on port ${PORT}`);
+  logger.info("Server listening on PORT", PORT);
 });
 
+logger.info("Connecting to MongoDB...");
 // Connect to MongoDB asynchronously without blocking
 connectDB().catch(error => {
   logger.error('Failed to connect to MongoDB during startup:', error);
