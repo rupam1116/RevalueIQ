@@ -8,7 +8,7 @@ export const connectDB = async () => {
   const uri = process.env.MONGODB_URI || process.env.MONGO_URI;
   if (!uri) {
     logger.error('MONGODB_URI is not defined in environment variables.');
-    process.exit(1);
+    return Promise.reject(new Error('MONGODB_URI is not defined in environment variables.'));
   }
 
   return new Promise<void>((resolve, reject) => {
@@ -24,7 +24,6 @@ export const connectDB = async () => {
         if (retryCount >= MAX_RETRIES) {
           logger.error('Max connection retries reached. Exiting...');
           reject(error);
-          process.exit(1);
         } else {
           setTimeout(attemptConnection, 5000);
         }

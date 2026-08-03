@@ -8,35 +8,35 @@ import logger from './logs/logger';
 
 const PORT = process.env.PORT || 5000;
 
-const startServer = async () => {
-  try {
-    // Strictly require DB connection for Phase 2
-    await connectDB();
-    
-    const server = app.listen(PORT, () => {
-      logger.info(`Server is running on port ${PORT}`);
-    });
+// Start listening immediately to prevent Render timeout
+const server = app.listen(PORT, () => {
+  logger.info(`Server running on port ${PORT}`);
+});
 
-    // Graceful Shutdown
-    const shutdown = () => {
-      logger.info('SIGTERM/SIGINT received. Shutting down gracefully...');
-      server.close(() => {
-        logger.info('HTTP server closed.');
-        // If mongoose is connected, close it too
-        mongoose.connection.close(false).then(() => {
-          logger.info('MongoDB connection closed.');
-          process.exit(0);
-        });
+// Connect to MongoDB asynchronously without blocking
+connectDB().catch(error => {
+  logger.error('Failed to connect to MongoDB during startup:', error);
+});
+
+// Graceful Shutdown
+const shutdown = () => {
+  logger.info('SIGTERM/SIGINT received. Shutting down gracefully...');
+  server.close(() => {
+    logger.info('HTTP server closed.');
+    // If mongoose is connected, close it too
+    if (mongoose.connection.readyState === 1) {
+      mongoose.connection.close(false).then(() => {
+        logger.info('MongoDB connection closed.');
+        process.exit(0);
+      }).catch((err) => {
+        logger.error('Error closing MongoDB connection:', err);
+        process.exit(1);
       });
-    };
-
-    process.on('SIGTERM', shutdown);
-    process.on('SIGINT', shutdown);
-    
-  } catch (error) {
-    logger.error('Failed to start server:', error);
-    process.exit(1);
-  }
+    } else {
+      process.exit(0);
+    }
+  });
 };
 
-startServer();
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);
