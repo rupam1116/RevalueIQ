@@ -11,24 +11,28 @@ export const connectDB = async () => {
     process.exit(1);
   }
 
-  const attemptConnection = async () => {
-    try {
-      const conn = await mongoose.connect(uri);
-      logger.info(`MongoDB Connected: ${conn.connection.host}`);
-    } catch (error) {
-      retryCount++;
-      logger.error(`Error connecting to MongoDB (Attempt ${retryCount}/${MAX_RETRIES}):`, error);
-      
-      if (retryCount >= MAX_RETRIES) {
-        logger.error('Max connection retries reached. Exiting...');
-        process.exit(1);
+  return new Promise<void>((resolve, reject) => {
+    const attemptConnection = async () => {
+      try {
+        const conn = await mongoose.connect(uri);
+        logger.info(`MongoDB Connected: ${conn.connection.host}`);
+        resolve();
+      } catch (error) {
+        retryCount++;
+        logger.error(`Error connecting to MongoDB (Attempt ${retryCount}/${MAX_RETRIES}):`, error);
+        
+        if (retryCount >= MAX_RETRIES) {
+          logger.error('Max connection retries reached. Exiting...');
+          reject(error);
+          process.exit(1);
+        } else {
+          setTimeout(attemptConnection, 5000);
+        }
       }
-      
-      setTimeout(attemptConnection, 5000);
-    }
-  };
+    };
 
-  await attemptConnection();
+    attemptConnection();
+  });
 };
 
 // Graceful shutdown handling
