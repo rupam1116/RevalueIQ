@@ -1,92 +1,178 @@
-# Architecture Review & Migration Plan
+# RevalueIQ — Comprehensive Architecture Review & Backend Migration Plan
 
-This document provides a comprehensive architectural analysis of the current RevalueIQ codebase, based strictly on the current source code without making any modifications.
+## 1. Executive Summary
+RevalueIQ is an AI-powered circular economy platform for second-hand goods valuation, repair recommendations, resale, donation, and e-waste reduction. The frontend interface has reached full completion, featuring rich interactive modules, client-side route protection, responsive layouts, forms, and mock/demo data stores.
 
-## 1. Current Project Folder Structure
-The project currently suffers from a fractured, multi-stack structure containing four separate application roots:
-- **`frontend/`**: The primary, active application. A Next.js 14 App Router project utilizing Tailwind CSS, `shadcn/ui`, Prisma ORM, and Clerk for authentication. 
-- **`backend/`**: A stubbed Python FastAPI server containing only a basic `main.py` health-check. It does not currently handle any business logic.
-- **`server/`**: A legacy or mocked Node.js/Express server that returns hardcoded JSON responses for analysis, advisor, and partner endpoints.
-- **`client/`**: A legacy Vite + React application, largely unused compared to the Next.js `frontend`.
-
-## 2. Frontend Architecture Analysis
-- **Framework**: Next.js 14 (App Router).
-- **Styling**: Tailwind CSS + `shadcn/ui` + `framer-motion` for micro-animations.
-- **Auth**: Clerk (`@clerk/nextjs`).
-- **State/Data**: Server components combined with Serverless API routes.
-- **Architecture**: Monolithic serverless. The frontend is currently bearing the weight of both the UI and the heavy backend business logic via its `app/api` directory.
-
-## 3. Backend Architecture Analysis (if any)
-Currently, there is no unified backend:
-- The actual production logic is embedded in **Next.js Serverless API routes** (`frontend/src/app/api`).
-- The standalone `backend` (Python) and `server` (Node) directories are completely disconnected from the active data flow and contain only stubs or mocked data.
-
-## 4. Files Containing Business Logic
-- `frontend/src/app/api/analyze/route.ts`: Contains the core appraisal logic (parsing form data, processing images via Gemini Vision, determining condition/price).
-- `frontend/src/app/api/repair-shops/search/route.ts`: Contains over 1000 lines of logic to search, filter, and calculate distances for repair shops based on user location and device type.
-- `server/routes/analysis.js` & `server/routes/advisor.js`: Contain mocked/hardcoded business logic for legacy purposes.
-
-## 5. Files Calling External APIs Directly
-- `frontend/src/app/api/analyze/route.ts`: Calls **Google Generative AI (Gemini)** for image analysis and **Supabase Storage** for image hosting.
-- `frontend/src/app/api/repair-shops/search/route.ts`: Calls **OpenStreetMap Nominatim API** and **Overpass API** for real-time geolocation and shop discovery.
-- `frontend/src/app/api/newsletter/route.ts`: Calls **Resend API** for email delivery.
-
-## 6. Files Containing Database Logic
-- `frontend/prisma/schema.prisma`: Defines the PostgreSQL schema (e.g., `Appraisal` model).
-- `frontend/src/lib/db.ts`: Instantiates the Prisma Client singleton.
-- `frontend/src/app/api/analyze/route.ts`: Executes direct database writes (`db.appraisal.create`).
-
-## 7. Files Containing Authentication Logic
-- `frontend/src/middleware.ts`: Implements Clerk's `clerkMiddleware` to protect specific routes (e.g., `/dashboard`, `/upload`).
-- `frontend/src/app/api/analyze/route.ts`: Interacts with Clerk's `auth()` helper to extract the `userId` before saving appraisals.
-
-## 8. Environment Variables
-Variables are primarily stored in `frontend/.env.local`:
-- **Auth**: `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`
-- **Database**: `DATABASE_URL`, `DIRECT_URL` (PostgreSQL)
-- **Storage**: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
-- **AI / External**: `GEMINI_API_KEY`, `RESEND_API_KEY`, `GNEWS_API_KEY`
-
-## 9. Security Issues
-- **Authentication Bypass**: In `api/analyze/route.ts`, if Clerk auth fails, the system silently catches the error and assigns a generic `"guest-mobile-user"`. This allows unauthenticated users to create DB records and exhaust expensive Gemini API quotas.
-- **Missing Rate Limiting**: None of the external API endpoints (Gemini, Resend) are protected by rate limiters, leaving the application vulnerable to DDoS or billing exhaustion attacks.
-
-## 10. Performance Issues
-- **Synchronous Heavy APIs**: `api/analyze/route.ts` uploads an image to Supabase, queries the Gemini API with retries, and writes to a DB all within a single synchronous HTTP request. This is highly prone to serverless timeouts (typically 10-15s on Vercel/Netlify).
-- **Bloated Endpoints**: `api/repair-shops/search/route.ts` is 1000+ lines long, performing multiple sequential HTTP calls to OpenStreetMap APIs which will block the thread and cause severe latency for the user.
-
-## 11. Scalability Issues
-- **Tight Coupling**: The Next.js frontend is tightly coupled to the database and heavy AI logic. Scaling the frontend UI independently of the heavy AI processing is currently impossible.
-- **Connection Pooling**: Serverless functions scaling horizontally will rapidly spawn new Prisma connections, potentially exhausting the PostgreSQL database connection limit.
-
-## 12. Maintainability Issues
-- **Massive File Sizes**: Single files like the repair-shop search route are doing too much (routing, geocoding, business rules, external API fetching).
-- **Fractured Codebase**: Having `frontend`, `backend`, `client`, and `server` directories causes severe developer confusion and fragments the domain logic.
-
-## 13. Code Duplication
-- There is significant duplication of domain concepts. The AI appraisal logic exists both in the Next.js API routes (production) and the `server` Express app (mocked).
+This document presents a comprehensive, empirical architectural audit of the codebase, evaluating frontend structure, data flows, API patterns, security vulnerabilities, performance bottlenecks, and mock dependencies. It establishes the target production architecture powered by **Python (FastAPI)** and **MongoDB Atlas** using the official MongoDB async driver (`motor`).
 
 ---
 
-## 14. Complete Migration Roadmap to an Enterprise Architecture
+## 2. Current Architecture & Codebase Inspection
 
-**Phase 1: Codebase Consolidation & Cleanup**
-1. Delete the unused `client/` (Vite) and `server/` (Express) directories to eliminate confusion.
-2. Decide on a unified backend stack. We recommend shifting all API routes out of Next.js and into the existing Python **FastAPI** (`backend/`) setup, as Python is significantly better suited for AI/ML processing (Gemini integration).
+### 2.1 Codebase Structure
+The project workspace contains the active frontend alongside legacy server stubs:
+- `frontend/`: Primary Next.js 16 (React 19, TypeScript) App Router web application.
+- `backend/`: Python FastAPI backend foundation using the official MongoDB async driver (`motor`).
+- `backend_python_legacy/`: Legacy stub folder (marked for cleanup).
+- `server_legacy/`: Legacy Express.js mock server (marked for cleanup).
+- `client/`: Unused Vite + React application (marked for cleanup).
 
-**Phase 2: Decoupling & API Gateway**
-1. **Frontend**: The Next.js app should become a pure presentation layer. It will fetch data and submit forms to the FastAPI backend.
-2. **Backend**: Migrate `analyze`, `repair-shops`, and `newsletter` logic from Next.js API routes into FastAPI controllers.
-3. **Database**: Move Prisma schema and database management to the backend (e.g., using SQLAlchemy or Prisma Python).
+**Target Consolidation:** Legacy server stubs (`server_legacy/`, `client/`, `backend_python_legacy/`) are deprecated. The production backend is constructed cleanly in `backend/` using **Python 3.11+ & FastAPI** with **MongoDB Atlas**.
 
-**Phase 3: Asynchronous Processing (Message Queue)**
-1. Implement a task queue (e.g., Celery + Redis for Python, or BullMQ for Node).
-2. Refactor the Image Analysis flow:
-   - Frontend uploads image -> Backend returns a `jobId`.
-   - Backend processes Gemini AI and Supabase upload in the background worker.
-   - Frontend polls or uses WebSockets to get the final result, eliminating HTTP timeouts entirely.
+### 2.2 Frontend Framework & Structure
+- **Framework:** Next.js 16.2.11 (React 19.2.4, TypeScript 5, App Router).
+- **Styling:** Tailwind CSS 4 + `shadcn/ui` + `framer-motion` for animations + `lucide-react` icons.
+- **Routing Structure:**
+  - Public Guest Routes: `/` (Landing), `/login`, `/signup`, `/forgot-password`, `/verify-email`, `/reset-password`, `/about`, `/features`, `/how-it-works`, `/pricing`, `/faqs`, `/contact`, `/careers`, `/blog`, `/privacy`, `/terms`.
+  - Protected App Tab Routes: Managed in `frontend/src/app/(protected)/` and unified workspace view `frontend/src/app/app/page.tsx` with sub-tabs:
+    - `valuation`: AI Optical Device Valuation & Pricing Trend Report
+    - `repair`: AI Diagnostic Repair Advisor & DIY vs Pro Guide
+    - `repair-shops`: Certified Repair Hub Search, Geolocation & Booking
+    - `marketplace`: Circular Marketplace Listings, Cart, Escrow & Buying
+    - `donation`: NGO & E-Waste Center Donation Hub & CO₂ Certificates
+    - `community`: Forum Posts, Q&A, Repair Guides & Leaderboards
+    - `history`: User Activity Log, Reports Export & Analytics Charts
+    - `profile`: User Profile, Achievements, Badges & Saved Items
+    - `settings`: Profile Info, Security, Notifications & App Preferences
 
-**Phase 4: Security & Scalability Hardening**
-1. Implement strict JWT validation on the backend using Clerk's JWKS. Remove the `"guest-mobile-user"` fallback.
-2. Add Rate Limiting (e.g., Redis-based token bucket) to all public-facing endpoints.
-3. Modularize massive files (like `repair-shops/search`) into Services, Repositories, and Controllers to adhere to SOLID principles.
+### 2.3 Authentication Implementation
+- **Client Auth:** Implemented via Firebase Authentication (`@firebase/auth`) in `frontend/src/context/AuthContext.tsx`.
+- **Flow:** Supports Email/Password authentication, Google OAuth popup login, password reset emails, email verification, and ID token generation via `user.getIdToken()`.
+- **Client Route Guard:** `AuthContext.tsx` maintains a 2-state route engine enforcing route access.
+
+### 2.4 Mock & Demo Data Dependencies
+The frontend currently relies on static TypeScript mock datasets in `frontend/src/lib/`:
+- `mockAuth.ts`, `mockValuationData.ts`, `mockRepairData.ts`, `mockRepairShopData.ts`, `mockDonationData.ts`, `mockCommunityData.ts`, `mockHistoryData.ts`, `mockProfileData.ts`, `mockSettingsData.ts`.
+
+---
+
+## 3. Findings & Code Audit
+
+### 3.1 Security Risks & Vulnerabilities
+1. **Lack of Backend ID Token Verification:** API layer must verify Firebase ID tokens via Firebase Admin SDK.
+2. **Exposed Mock Keys in Client Source:** `firebase.ts` falls back to inline `'mock-key'` strings when environment variables are missing.
+3. **Missing Rate Limiting:** External API endpoints need throttling against DDoS or quota exhaustion.
+4. **Client-Side Data Calculation:** Valuation prices and carbon scores are currently client-calculated; they will move to FastAPI services.
+
+### 3.2 Performance & Scalability Considerations
+1. **Dynamic Document Model:** AI valuation reports and diagnostic outputs generate rich, variable JSON structures. MongoDB's native BSON document model avoids rigid SQL ALTER TABLE migrations while allowing instant nested schema storage.
+2. **Geospatial Proximity Queries:** Repair shop and donation center searches require fast distance-based radial lookups (`2dsphere` indexes).
+
+---
+
+## 4. Target Recommended Architecture
+
+### 4.1 Technology Stack
+
+```
+   ┌─────────────────────────────────────────────────────────┐
+   │            NEXT.JS 16 FRONTEND (Presentation)            │
+   │  React 19 · Tailwind CSS · Firebase Auth Client · Axios │
+   └────────────────────────────┬────────────────────────────┘
+                                │ HTTP / REST (JSON + Bearer Token)
+                                ▼
+   ┌─────────────────────────────────────────────────────────┐
+   │             FASTAPI BACKEND (Business Logic)            │
+   │   Python 3.11+ · Pydantic v2 · Motor (Async Driver)    │
+   └───────┬────────────────────┬───────────────────┬────────┘
+           │                    │                   │
+           ▼                    ▼                   ▼
+┌──────────────────┐  ┌──────────────────┐  ┌──────────────┐
+│  MONGODB ATLAS   │  │    GEMINI AI     │  │ CLOUDINARY / │
+│ Users, Devices,  │  │ Vision & Prompt  │  │  SUPABASE    │
+│  Valuations, etc │  │ Valuation Models │  │ Object Store │
+└──────────────────┘  └──────────────────┘  └──────────────┘
+```
+
+- **Frontend:** Existing Next.js 16 App Router application (Unchanged UI/UX).
+- **Backend:** Python 3.11+ with **FastAPI** framework.
+- **Database:** **MongoDB Atlas** using official **Motor** async driver (`AsyncIOMotorClient`).
+- **Authentication:** Firebase Admin SDK on FastAPI for verifying Firebase Bearer JWT tokens.
+- **AI Processing:** Google Generative AI (Gemini 1.5 Flash / Pro Vision) integrated via Python `google-generativeai` package.
+- **File Storage:** Cloudinary or Supabase Storage for secure media uploads.
+
+### 4.2 Modular FastAPI Backend Structure
+```
+backend/
+├── app/
+│   ├── __init__.py
+│   ├── main.py                  # FastAPI Application Entry & CORS Setup
+│   ├── core/                    # Security, Firebase Admin, Config, Exceptions, Logging
+│   │   ├── config.py            # Pydantic BaseSettings (.env loading)
+│   │   ├── security.py          # Firebase Token Authentication Dependency
+│   │   ├── firebase.py          # Firebase Admin SDK Initialization
+│   │   ├── exceptions.py        # Centralized Exception Handlers
+│   │   └── logging.py           # Structured Request Logging
+│   ├── db/                      # Database Connection & Collections
+│   │   ├── __init__.py
+│   │   └── mongo.py             # Motor AsyncIOMotorClient & Index Initializer
+│   ├── schemas/                 # Pydantic Request/Response Schemas
+│   │   ├── health.py
+│   │   ├── user.py
+│   │   ├── valuation.py
+│   │   ├── repair.py
+│   │   ├── marketplace.py
+│   │   ├── donation.py
+│   │   └── community.py
+│   ├── api/                     # Modular API Routers
+│   │   ├── deps.py
+│   │   └── v1/
+│   │       ├── router.py
+│   │       ├── auth.py
+│   │       ├── users.py
+│   │       ├── valuation.py
+│   │       ├── repair.py
+│   │       ├── repair_shops.py
+│   │       ├── marketplace.py
+│   │       ├── donation.py
+│   │       ├── community.py
+│   │       └── analytics.py
+│   ├── services/                # Core Business Logic Layer
+│   │   ├── ai_valuation.py
+│   │   ├── repair_advisor.py
+│   │   ├── storage.py
+│   │   └── impact_calculator.py
+│   └── utils/
+├── tests/                       # Pytest Suite
+├── requirements.txt             # Python Dependencies (fastapi, motor, pymongo, firebase-admin)
+├── .env.example                 # Backend Environment Template
+└── README.md
+```
+
+---
+
+## 5. Security & Authentication Architecture
+
+1. **Authentication Flow:**
+   - User signs in on Next.js via Firebase Auth.
+   - Frontend obtains Firebase ID Token using `user.getIdToken()`.
+   - Frontend includes token in header: `Authorization: Bearer <ID_TOKEN>`.
+   - FastAPI middleware/dependency intercepts request, verifies token via `firebase_admin.auth.verify_id_token(token)`.
+   - FastAPI extracts `uid`, syncs or fetches user document from MongoDB Atlas `users` collection, and attaches `current_user` to endpoint context.
+
+2. **Secrets Management:**
+   - Zero credentials in frontend code.
+   - `MONGODB_URI`, `GEMINI_API_KEY`, `FIREBASE_SERVICE_ACCOUNT_PATH`, and private keys strictly confined to backend `.env`.
+
+---
+
+## 6. Migration Plan: Mock Data to Real REST APIs
+
+| Module | Mock Data File | Target FastAPI Endpoint | MongoDB Collection |
+| :--- | :--- | :--- | :--- |
+| **Auth & Profile** | `mockAuth.ts`, `mockProfileData.ts` | `/api/v1/auth/me`, `/api/v1/users/profile` | `users`, `user_profiles` |
+| **Valuation** | `mockValuationData.ts` | `/api/v1/valuation/analyze`, `/api/v1/valuation/history` | `device_valuations` |
+| **Repair Advisor** | `mockRepairData.ts` | `/api/v1/repair/diagnose`, `/api/v1/repair/history` | `repair_reports` |
+| **Repair Centers** | `mockRepairShopData.ts` | `/api/v1/repair-shops/search`, `/api/v1/repair-shops/book` | `repair_shops`, `repair_bookings` |
+| **Marketplace** | `mockMarketplaceData.ts` | `/api/v1/marketplace/listings`, `/api/v1/marketplace/buy` | `marketplace_listings`, `marketplace_orders` |
+| **Donation Hub** | `mockDonationData.ts` | `/api/v1/donation/centers`, `/api/v1/donation/donate` | `donation_centers`, `donations` |
+| **Community** | `mockCommunityData.ts` | `/api/v1/community/posts`, `/api/v1/community/guides` | `community_posts`, `post_replies` |
+| **History/Analytics** | `mockHistoryData.ts` | `/api/v1/analytics/overview`, `/api/v1/history/activities` | `user_activities`, `impact_certificates` |
+
+---
+
+## 7. Minimal Required Frontend Integration Changes
+To connect the frontend without altering UI/UX:
+1. Update `frontend/src/lib/api.ts` to export an authenticated Axios client with automatic Bearer token injection.
+2. Replace static mock function calls in components with custom hooks calling FastAPI endpoints.
+3. Fallback smoothly to initial values during network loading states to preserve smooth micro-animations.
