@@ -71,7 +71,19 @@ async def get_current_user(
     """
     try:
         user_doc, profile_doc = await sync_firebase_user(db, claims)
+        if user_doc.get("status") == "deleted":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Account has been permanently closed or deleted."
+            )
+        if user_doc.get("status") == "suspended":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Account has been suspended."
+            )
         return AuthenticatedUser(user_doc, profile_doc)
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.error(f"Error synchronizing authenticated user: {exc}")
         raise HTTPException(

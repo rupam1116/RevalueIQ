@@ -11,6 +11,7 @@ from app.api.v1.donation_organizations import router as donation_organizations_r
 from app.api.v1.history import router as history_router
 from app.api.v1.payments import router as payments_router
 from app.api.v1.notifications import router as notifications_router
+from app.api.v1.settings import router as settings_router
 
 api_v1_router = APIRouter()
 
@@ -27,6 +28,7 @@ api_v1_router.include_router(donation_organizations_router)
 api_v1_router.include_router(history_router)
 api_v1_router.include_router(payments_router)
 api_v1_router.include_router(notifications_router)
+api_v1_router.include_router(settings_router)
 
 
 

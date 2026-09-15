@@ -27,6 +27,8 @@ def build_profile_dict(user_doc: Dict[str, Any], profile_doc: Optional[Dict[str,
         "country": p.get("country", ""),
         "occupation": p.get("occupation", ""),
         "organization": p.get("organization", ""),
+        "language": p.get("language", "English (US)"),
+        "timezone": p.get("timezone", "Asia/Kolkata"),
         "role": user_doc.get("role", "user"),
         "status": user_doc.get("status", "active"),
         "circular_score": p.get("circular_score", 100),
@@ -60,15 +62,28 @@ async def update_user_profile(
     profile_updates: Dict[str, Any] = {"updated_at": now}
 
     if "full_name" in update_fields and update_fields["full_name"] is not None:
-        user_updates["full_name"] = update_fields["full_name"]
+        name_clean = str(update_fields["full_name"]).strip()
+        if not name_clean:
+            raise ValueError("Full name cannot be empty.")
+        user_updates["full_name"] = name_clean
 
     if "photo_url" in update_fields and update_fields["photo_url"] is not None:
         user_updates["photo_url"] = update_fields["photo_url"]
         profile_updates["avatar_url"] = update_fields["photo_url"]
 
-    for field in ["bio", "city", "country", "phone", "occupation", "organization"]:
+    for field in ["bio", "city", "country", "phone", "occupation", "organization", "language"]:
         if field in update_fields and update_fields[field] is not None:
-            profile_updates[field] = update_fields[field]
+            profile_updates[field] = str(update_fields[field]).strip()
+
+    if "timezone" in update_fields and update_fields["timezone"] is not None:
+        tz_str = str(update_fields["timezone"]).strip()
+        # Validate IANA timezone
+        try:
+            from zoneinfo import ZoneInfo
+            ZoneInfo(tz_str)
+            profile_updates["timezone"] = tz_str
+        except Exception:
+            raise ValueError(f"Invalid IANA timezone identifier: {tz_str}")
 
     if "social_links" in update_fields and update_fields["social_links"] is not None:
         profile_updates["social_links"] = update_fields["social_links"]

@@ -30,6 +30,8 @@ class UserProfileResponse(BaseModel):
     ewaste_prevented_kg: float = Field(..., description="Total e-waste diverted in kilograms")
     karma_points: int = Field(..., description="Accumulated karma points")
     level: int = Field(..., description="User gamification level")
+    language: Optional[str] = Field(default="English (US)", description="User primary language")
+    timezone: Optional[str] = Field(default="Asia/Kolkata", description="User IANA timezone")
     social_links: Optional[SocialLinksSchema] = Field(default_factory=SocialLinksSchema)
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
@@ -42,6 +44,8 @@ class UserProfileUpdateRequest(BaseModel):
     bio: Optional[str] = Field(default=None, max_length=500, description="Short user bio")
     city: Optional[str] = Field(default=None, max_length=100, description="City")
     country: Optional[str] = Field(default=None, max_length=100, description="Country")
+    language: Optional[str] = Field(default=None, max_length=50, description="Preferred language")
+    timezone: Optional[str] = Field(default=None, max_length=50, description="IANA Timezone identifier")
     occupation: Optional[str] = Field(default=None, max_length=100, description="Occupation")
     organization: Optional[str] = Field(default=None, max_length=100, description="Organization")
     social_links: Optional[SocialLinksSchema] = Field(default=None, description="Social profile URLs")
