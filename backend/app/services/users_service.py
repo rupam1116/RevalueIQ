@@ -131,16 +131,74 @@ async def get_user_stats(
 
     donations_count = await db.donations.count_documents({"user_id": user_id})
 
+    # Portfolio value, repair savings, and grade distribution from device valuations
+    val_cursor = db.device_valuations.find({"user_id": user_id})
+    val_items = [doc async for doc in val_cursor]
+
+    portfolio_val = 0.0
+    repair_savings = 0.0
+    grade_a_count = 0
+    total_val_count = len(val_items)
+
+    for doc in val_items:
+        val = doc.get("valuation") or {}
+        ai = doc.get("ai_analysis") or {}
+        resale = float(val.get("estimated_resale_value") or ai.get("estimated_resale_value") or 0.0)
+        repair = float(val.get("estimated_repair_cost") or val.get("repair_estimate") or ai.get("estimated_repair_cost") or 0.0)
+        
+        portfolio_val += resale
+        if repair > 0 and resale > repair:
+            repair_savings += (resale - repair)
+        elif repair > 0:
+            repair_savings += repair * 0.5
+
+        # Check grade
+        cond = str(ai.get("visible_condition", "")).lower()
+        if resale > 20000 or "new" in cond or "excellent" in cond or "good" in cond:
+            grade_a_count += 1
+
+    grade_a_pct = round((grade_a_count / total_val_count) * 100, 1) if total_val_count > 0 else 100.0
+
+    # Also include repair advisories if present
+    adv_cursor = db.repair_advisories.find({"user_id": user_id})
+    async for adv in adv_cursor:
+        ai = adv.get("ai_analysis") or {}
+        est_rep = float(ai.get("estimated_repair_cost") or 0.0)
+        if est_rep > 0:
+            repair_savings += max(1500.0, est_rep * 1.5)
+
+    # CO2 and EWaste calculation fallback if profile has 0
+    co2_val = float(p.get("co2_saved_kg", 0.0))
+    ewaste_val = float(p.get("ewaste_prevented_kg", 0.0))
+    if co2_val == 0.0 and total_val_count > 0:
+        co2_val = round(total_val_count * 4.62, 1)
+    if ewaste_val == 0.0 and total_val_count > 0:
+        ewaste_val = round(total_val_count * 0.45, 2)
+
+    circ_score = p.get("circular_score")
+    if circ_score is None or circ_score == 100 and total_val_count == 0:
+        circ_score = min(100, 75 + (total_val_count * 3) + (donations_count * 5))
+    else:
+        circ_score = int(circ_score)
+
+    circ_grade = p.get("circular_grade")
+    if not circ_grade:
+        circ_grade = "A+" if circ_score >= 85 else ("A" if circ_score >= 70 else "B")
+
     return {
-        "circular_score": p.get("circular_score", 100),
-        "circular_grade": p.get("circular_grade", "A"),
-        "co2_saved_kg": float(p.get("co2_saved_kg", 0.0)),
-        "ewaste_prevented_kg": float(p.get("ewaste_prevented_kg", 0.0)),
-        "karma_points": p.get("karma_points", 0),
-        "level": p.get("level", 1),
-        "devices_count": devices_count,
+        "circular_score": circ_score,
+        "circular_grade": circ_grade,
+        "co2_saved_kg": co2_val,
+        "ewaste_prevented_kg": ewaste_val,
+        "karma_points": p.get("karma_points", total_val_count * 10 + donations_count * 25),
+        "level": p.get("level", max(1, 1 + (total_val_count // 3))),
+        "devices_count": devices_count or total_val_count,
         "valuations_count": valuations_count,
         "repair_reports_count": repair_reports_count,
         "marketplace_listings_count": marketplace_listings_count,
         "donations_count": donations_count,
+        "portfolio_value": round(portfolio_val, 2),
+        "repair_savings": round(repair_savings, 2),
+        "grade_a_percentage": grade_a_pct,
     }
+

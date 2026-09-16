@@ -63,3 +63,7 @@ class UserStatsResponse(BaseModel):
     repair_reports_count: int = Field(..., description="Total repair reports generated")
     marketplace_listings_count: int = Field(..., description="Total active/past marketplace listings")
     donations_count: int = Field(..., description="Total completed device donations")
+    portfolio_value: float = Field(default=0.0, description="Total estimated resale value of user's devices in INR")
+    repair_savings: float = Field(default=0.0, description="Total estimated repair savings in INR")
+    grade_a_percentage: float = Field(default=100.0, description="Percentage of appraised devices with Grade A or A+")
+
