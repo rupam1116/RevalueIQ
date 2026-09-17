@@ -261,10 +261,10 @@ async def create_marketplace_listing(
             "maximum_value_inr": max_val,
             "valuation_id": str(valuation_doc["_id"]),
             "valuation_code": valuation_doc.get("valuation_code"),
-            "circularity_score": val_res.get("circularity_score", 90),
-            "co2_saved_kg": val_res.get("co2_saved_kg", 74.5),
-            "ewaste_diverted_kg": val_res.get("ewaste_diverted_kg", 0.85),
-            "water_saved_liters": val_res.get("water_saved_liters", 14500),
+            "circularity_score": val_res.get("circularity_score", 0),
+            "co2_saved_kg": val_res.get("co2_saved_kg", 0.0),
+            "ewaste_diverted_kg": val_res.get("ewaste_diverted_kg", 0.0),
+            "water_saved_liters": val_res.get("water_saved_liters", 0),
         }
 
     # 3. Generate Unique Listing Code
