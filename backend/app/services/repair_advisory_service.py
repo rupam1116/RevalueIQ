@@ -1,5 +1,6 @@
 import logging
 import secrets
+import re
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 from bson import ObjectId
@@ -190,8 +191,8 @@ async def list_user_advisories(
     if severity and severity.upper() != "ALL":
         query["ai_analysis.severity"] = severity.upper()
 
-    if search:
-        search_regex = {"$regex": search, "$options": "i"}
+    if search and search.strip():
+        search_regex = {"$regex": re.escape(search.strip()), "$options": "i"}
         query["$or"] = [
             {"advisory_code": search_regex},
             {"device_info.brand": search_regex},

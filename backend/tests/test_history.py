@@ -220,7 +220,7 @@ async def test_timeline_search_and_tier_filtering(test_db):
         title="Verified Donation: iPad Air 4",
         ngo_name="Digital Literacy Foundation",
         value_inr=28000.0
-    ))
+    ), allow_system_tier3=True)
 
     # 1. Test search query
     items_search, total_search = await get_user_timeline(test_db, user_id, search="Sony")

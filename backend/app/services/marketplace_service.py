@@ -1,6 +1,7 @@
 import logging
 import random
 import string
+import re
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List, Tuple
 from bson import ObjectId
@@ -404,12 +405,14 @@ async def get_published_listings(
     query: Dict[str, Any] = {"status": ListingStatus.PUBLISHED.value}
 
     if category and category.lower() != "all":
-        query["category"] = {"$regex": f"^{category}$", "$options": "i"}
+        safe_cat = re.escape(category.strip())
+        query["category"] = {"$regex": f"^{safe_cat}$", "$options": "i"}
 
     if brand:
         brands = [b.strip() for b in brand.split(",") if b.strip()]
         if len(brands) == 1:
-            query["brand"] = {"$regex": f"^{brands[0]}$", "$options": "i"}
+            safe_brand = re.escape(brands[0])
+            query["brand"] = {"$regex": f"^{safe_brand}$", "$options": "i"}
         elif len(brands) > 1:
             query["brand"] = {"$in": [b for b in brands]}
 
@@ -429,7 +432,7 @@ async def get_published_listings(
         query["asking_price_inr"] = price_query
 
     if search and search.strip():
-        q_term = search.strip()
+        q_term = re.escape(search.strip())
         query["$or"] = [
             {"title": {"$regex": q_term, "$options": "i"}},
             {"description": {"$regex": q_term, "$options": "i"}},
@@ -536,7 +539,7 @@ async def get_my_listings(
             query["status"] = ListingStatus.SOLD.value
 
     if search and search.strip():
-        q_term = search.strip()
+        q_term = re.escape(search.strip())
         query["$or"] = [
             {"title": {"$regex": q_term, "$options": "i"}},
             {"brand": {"$regex": q_term, "$options": "i"}},
@@ -577,6 +580,12 @@ async def update_marketplace_listing(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Listing not found or does not belong to you."
+        )
+
+    if doc.get("status") == ListingStatus.SOLD.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot edit a listing that has already been sold."
         )
 
     update_fields: Dict[str, Any] = {"updated_at": datetime.now(timezone.utc)}
@@ -654,7 +663,7 @@ async def update_marketplace_listing(
         update_fields["images"] = updated_stored_images
 
     await db.marketplace_listings.update_one(
-        {"_id": obj_id},
+        {"_id": obj_id, "seller_id": user_id},
         {"$set": update_fields}
     )
 

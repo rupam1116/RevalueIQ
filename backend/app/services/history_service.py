@@ -4,6 +4,7 @@ import string
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Tuple, Optional
 from bson import ObjectId
+from fastapi import HTTPException, status
 from pymongo.asynchronous.database import AsyncDatabase
 
 from app.schemas.history import (
@@ -463,16 +464,24 @@ async def get_user_analytics(db: AsyncDatabase, user_id: ObjectId) -> HistoryAna
 async def log_lifecycle_event(
     db: AsyncDatabase,
     user_id: ObjectId,
-    payload: LogLifecycleEventRequest
+    payload: LogLifecycleEventRequest,
+    allow_system_tier3: bool = False,
 ) -> Dict[str, Any]:
     """
     Persists a new action initiated or completed event into user_lifecycle_events collection.
     """
+    # RevalueIQ Integrity: direct client creation of Tier 3 completed events is forbidden
+    if payload.tier == LifecycleTierEnum.EXTERNALLY_COMPLETED and not allow_system_tier3:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Direct creation of Tier 3 completed events is forbidden. Events must be initiated and subsequently verified with completion details."
+        )
+
     now = datetime.now(timezone.utc)
     lca = _get_lca_benchmark(payload.category)
     event_code = _generate_event_code("EVT")
 
-    is_completed = payload.tier == LifecycleTierEnum.EXTERNALLY_COMPLETED
+    is_completed = payload.tier == LifecycleTierEnum.EXTERNALLY_COMPLETED and allow_system_tier3
 
     doc: Dict[str, Any] = {
         "event_code": event_code,

@@ -1,5 +1,6 @@
 import logging
 import math
+import re
 from typing import List, Optional, Tuple, Dict, Any
 from bson import ObjectId
 from pymongo.asynchronous.database import AsyncDatabase
@@ -142,20 +143,22 @@ async def list_donation_organizations(
 
     if donation_type and donation_type.strip() and donation_type.lower() != "all":
         # Match confirmed accepted donation types
-        db_query["accepted_donation_types"] = {"$regex": donation_type.strip(), "$options": "i"}
+        safe_type = re.escape(donation_type.strip())
+        db_query["accepted_donation_types"] = {"$regex": safe_type, "$options": "i"}
 
     # If coordinates are not resolved, use text matching for city
     if effective_lat is None and city and city.strip() and city.lower() != "all":
+        safe_city = re.escape(city.strip())
         db_query["$or"] = [
-            {"city": {"$regex": city.strip(), "$options": "i"}},
-            {"address": {"$regex": city.strip(), "$options": "i"}}
+            {"city": {"$regex": safe_city, "$options": "i"}},
+            {"address": {"$regex": safe_city, "$options": "i"}}
         ]
 
     if postal_code and postal_code.strip():
         db_query["postal_code"] = postal_code.strip()
 
     if search and search.strip():
-        clean_search = search.strip()
+        clean_search = re.escape(search.strip())
         search_clauses = [
             {"name": {"$regex": clean_search, "$options": "i"}},
             {"address": {"$regex": clean_search, "$options": "i"}},

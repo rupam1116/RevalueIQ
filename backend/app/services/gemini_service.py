@@ -3,6 +3,9 @@ import json
 import base64
 import logging
 import asyncio
+import socket
+import ipaddress
+from urllib.parse import urlparse
 from typing import Optional, Union, Dict, Any
 import httpx
 from fastapi import HTTPException, status
@@ -15,6 +18,44 @@ from app.schemas.gemini import GeminiAnalysisResult, DeviceDetectionResult
 from app.schemas.repair_advisory import GeminiRepairAdvisoryResult
 
 logger = logging.getLogger("revalueiq.services.gemini")
+
+
+def is_safe_external_image_url(url_str: str) -> bool:
+    """
+    Validates that a remote URL uses HTTP/HTTPS and does not target
+    localhost, loopback, RFC 1918 private subnets, link-local / cloud metadata (169.254.169.254),
+    carrier-grade NAT, or reserved multicast IP addresses (SSRF prevention).
+    """
+    try:
+        parsed = urlparse(url_str)
+        if parsed.scheme not in ("http", "https"):
+            return False
+        hostname = parsed.hostname
+        if not hostname:
+            return False
+
+        lower_host = hostname.lower()
+        if lower_host in ("localhost", "127.0.0.1", "::1", "0.0.0.0", "metadata.google.internal"):
+            return False
+
+        addr_info = socket.getaddrinfo(hostname, None)
+        for entry in addr_info:
+            ip_str = entry[4][0]
+            ip = ipaddress.ip_address(ip_str)
+            if (
+                ip.is_private
+                or ip.is_loopback
+                or ip.is_link_local
+                or ip.is_multicast
+                or ip.is_reserved
+                or ip.is_unspecified
+                or ip_str.startswith("169.254.")
+            ):
+                return False
+        return True
+    except Exception as exc:
+        logger.warning(f"URL security validation rejected '{url_str}': {exc}")
+        return False
 
 REPAIR_ADVISORY_SYSTEM_PROMPT = """You are an expert consumer-electronics repair advisor and diagnostic engineer for RevalueIQ.
 
@@ -196,8 +237,12 @@ def _prepare_image_part(image_input: Union[str, bytes]) -> types.Part:
 
     # Handle HTTP / HTTPS remote URL
     if stripped.startswith(("http://", "https://")):
+        if not is_safe_external_image_url(stripped):
+            raise ValueError(
+                "Remote image URL is invalid or targets a restricted/private network address (SSRF protection)."
+            )
         try:
-            with httpx.Client(timeout=10.0, follow_redirects=True) as http_client:
+            with httpx.Client(timeout=10.0, follow_redirects=False) as http_client:
                 res = http_client.get(stripped)
                 res.raise_for_status()
                 content_type = res.headers.get("content-type", "image/jpeg").split(";")[0].strip().lower()

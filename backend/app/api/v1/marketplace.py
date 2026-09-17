@@ -229,7 +229,7 @@ async def unpublish_listing(
     "/listings/{listing_id}/sold",
     response_model=MarketplaceListingResponse,
     summary="Mark Listing as Sold",
-    description="Marks an active listing as sold.",
+    description="Prohibits manual transition to SOLD. Listings must transition to SOLD through verified transaction fulfillment.",
 )
 async def mark_sold(
     listing_id: str = Path(..., description="Listing ID to mark as sold"),
@@ -238,10 +238,12 @@ async def mark_sold(
 ) -> MarketplaceListingResponse:
     """
     POST /api/v1/marketplace/listings/{listing_id}/sold
+    Manual transition to SOLD is forbidden by RevalueIQ integrity rules.
     """
-    user_id = ObjectId(current_user.id)
-    doc = await mark_listing_sold(db, listing_id, user_id)
-    return MarketplaceListingResponse(**doc)
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Manual transition to SOLD is prohibited. Listings can only transition to SOLD through verified transaction fulfillment."
+    )
 
 
 @router.delete(

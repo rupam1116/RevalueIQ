@@ -1,5 +1,6 @@
 import logging
 import math
+import re
 from typing import List, Optional, Tuple, Dict, Any
 from bson import ObjectId
 from pymongo.asynchronous.database import AsyncDatabase
@@ -132,32 +133,36 @@ async def list_repair_centers(
         db_query["is_verified"] = True
 
     if brand and brand.strip() and brand.lower() != "all":
-        db_query["brand_services"] = {"$regex": f"^{brand.strip()}$", "$options": "i"}
+        safe_brand = re.escape(brand.strip())
+        db_query["brand_services"] = {"$regex": f"^{safe_brand}$", "$options": "i"}
 
     if category and category.strip() and category.lower() != "all":
-        db_query["device_categories"] = {"$regex": f"^{category.strip()}$", "$options": "i"}
+        safe_cat = re.escape(category.strip())
+        db_query["device_categories"] = {"$regex": f"^{safe_cat}$", "$options": "i"}
 
     if repair_type and repair_type.strip() and repair_type.lower() != "all":
-        db_query["repair_services"] = {"$regex": repair_type.strip(), "$options": "i"}
+        safe_repair = re.escape(repair_type.strip())
+        db_query["repair_services"] = {"$regex": safe_repair, "$options": "i"}
 
     if city and city.strip() and city.lower() != "all":
-        city_regex = {"$regex": city.strip(), "$options": "i"}
+        city_regex = {"$regex": re.escape(city.strip()), "$options": "i"}
         db_query["$or"] = [
             {"city": city_regex},
             {"address": city_regex}
         ]
 
     if area and area.strip():
-        db_query["address"] = {"$regex": area.strip(), "$options": "i"}
+        db_query["address"] = {"$regex": re.escape(area.strip()), "$options": "i"}
 
     if postal_code and postal_code.strip():
+        safe_postal = re.escape(postal_code.strip())
         db_query["$or"] = [
-            {"postal_code": {"$regex": postal_code.strip(), "$options": "i"}},
-            {"address": {"$regex": postal_code.strip(), "$options": "i"}}
+            {"postal_code": {"$regex": safe_postal, "$options": "i"}},
+            {"address": {"$regex": safe_postal, "$options": "i"}}
         ]
 
     if search and search.strip():
-        search_regex = {"$regex": search.strip(), "$options": "i"}
+        search_regex = {"$regex": re.escape(search.strip()), "$options": "i"}
         db_query["$or"] = [
             {"name": search_regex},
             {"address": search_regex},

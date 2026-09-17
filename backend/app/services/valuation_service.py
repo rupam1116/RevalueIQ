@@ -2,6 +2,7 @@ import hashlib
 import logging
 import secrets
 import string
+import re
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 from bson import ObjectId
@@ -209,7 +210,7 @@ async def list_user_valuations(
     filters: List[Dict[str, Any]] = [{"user_id": user_id}]
 
     if category and category.lower() != "all":
-        cat_clean = category.strip()
+        cat_clean = re.escape(category.strip())
         filters.append({
             "$or": [
                 {"input.category": {"$regex": f"^{cat_clean}$", "$options": "i"}},
@@ -221,7 +222,7 @@ async def list_user_valuations(
         filters.append({"status": status})
 
     if search and search.strip():
-        q_clean = search.strip()
+        q_clean = re.escape(search.strip())
         filters.append({
             "$or": [
                 {"input.device_name": {"$regex": q_clean, "$options": "i"}},
@@ -234,7 +235,8 @@ async def list_user_valuations(
 
     query = {"$and": filters} if len(filters) > 1 else filters[0]
 
-    cursor = db.device_valuations.find(query).sort("created_at", -1)
+    limit = 50
+    cursor = db.device_valuations.find(query).sort("created_at", -1).limit(limit)
     valuations = []
     async for doc in cursor:
         valuations.append(format_valuation_doc(doc))

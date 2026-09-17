@@ -13,6 +13,8 @@ from app.core.exceptions import (
     validation_exception_handler,
     generic_exception_handler,
 )
+from app.core.security_headers import SecurityHeadersMiddleware
+from app.core.rate_limit import RateLimitMiddleware
 from app.api.v1.router import api_v1_router
 
 
@@ -43,7 +45,7 @@ def create_application() -> FastAPI:
     # 1. Production Logging Middleware
     app.add_middleware(LoggingMiddleware)
 
-    # 2. CORS Configuration (Added after LoggingMiddleware so CORSMiddleware wraps all responses on the outside)
+    # 2. CORS Configuration
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
@@ -52,12 +54,18 @@ def create_application() -> FastAPI:
         allow_headers=["*"],
     )
 
-    # 3. Centralized Exception Handlers
+    # 3. Production Security & Cache Headers Middleware
+    app.add_middleware(SecurityHeadersMiddleware)
+
+    # 4. Sliding-Window Rate Limiting Middleware
+    app.add_middleware(RateLimitMiddleware)
+
+    # 5. Centralized Exception Handlers
     app.add_exception_handler(StarletteHTTPException, custom_http_exception_handler)
     app.add_exception_handler(RequestValidationError, validation_exception_handler)
     app.add_exception_handler(Exception, generic_exception_handler)
 
-    # 4. Mount API v1 Routers
+    # 6. Mount API v1 Routers
     app.include_router(api_v1_router, prefix="/api/v1")
 
     return app

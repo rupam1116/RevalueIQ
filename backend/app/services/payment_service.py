@@ -266,12 +266,8 @@ async def verify_payment_signature(
         settings.PAYMENT_KEY_SECRET
     )
 
-    # Allow valid signature match OR test signature matching logic
+    # Strictly verify authentic HMAC-SHA256 digest
     is_valid = hmac.compare_digest(expected_sig, req.razorpay_signature)
-    
-    # Dev test override for sandbox testing if signatures match dummy pattern
-    if not is_valid and req.razorpay_signature.startswith("sig_test_") or req.razorpay_signature == expected_sig:
-        is_valid = True
 
     now = datetime.now(timezone.utc)
 
@@ -296,9 +292,12 @@ async def verify_payment_signature(
             detail="Invalid payment signature. Verification failed."
         )
 
-    # Update Payment Record to PAID
+    # Atomically transition Payment Record to PAID (only if not already PAID)
     updated_payment = await db.payments.find_one_and_update(
-        {"_id": payment_obj_id},
+        {
+            "_id": payment_obj_id,
+            "status": {"$ne": PaymentStatus.PAID.value}
+        },
         {
             "$set": {
                 "status": PaymentStatus.PAID.value,
@@ -309,56 +308,73 @@ async def verify_payment_signature(
         return_document=True
     )
 
+    # Idempotent guard: if payment was already processed by webhook or prior call, return existing state
+    if not updated_payment:
+        latest = await db.payments.find_one({"_id": payment_obj_id})
+        return format_payment_doc(latest or payment)
+
     # Fulfill Business Entity
     related_type = payment.get("related_entity_type")
     related_id = payment.get("related_entity_id")
     amount_inr = float(payment.get("amount_inr", 0.0))
 
-    if related_type in ("marketplace_listing", "listing"):
+    if related_type in ("marketplace_listing", "listing") and related_id:
         try:
             listing_id_obj = ObjectId(related_id)
-            listing = await db.marketplace_listings.find_one({"_id": listing_id_obj})
-            if listing:
-                await db.marketplace_listings.update_one(
-                    {"_id": listing_id_obj},
-                    {
-                        "$set": {
-                            "status": "SOLD",
-                            "buyer_id": user_id,
-                            "sold_at": now,
-                        }
+            # Atomically mark listing as SOLD only if it remains ACTIVE/AVAILABLE/PUBLISHED
+            sold_listing = await db.marketplace_listings.find_one_and_update(
+                {
+                    "_id": listing_id_obj,
+                    "status": {"$in": ["ACTIVE", "AVAILABLE", "PUBLISHED"]}
+                },
+                {
+                    "$set": {
+                        "status": "SOLD",
+                        "buyer_id": user_id,
+                        "sold_at": now,
+                        "updated_at": now,
                     }
-                )
+                },
+                return_document=True
+            )
 
-                # Insert Marketplace Order
-                order_doc = {
-                    "order_number": f"ORD-{payment.get('order_id')}",
-                    "listing_id": listing_id_obj,
-                    "buyer_id": user_id,
-                    "seller_id": listing.get("seller_id"),
-                    "amount_inr": amount_inr,
-                    "payment_id": payment_obj_id,
-                    "status": "COMPLETED",
-                    "created_at": now,
-                }
-                await db.marketplace_orders.insert_one(order_doc)
+            if sold_listing:
+                # Insert Marketplace Order idempotently
+                order_num = f"ORD-{payment.get('order_id')}"
+                existing_order = await db.marketplace_orders.find_one({"order_number": order_num})
+                if not existing_order:
+                    order_doc = {
+                        "order_number": order_num,
+                        "listing_id": listing_id_obj,
+                        "buyer_id": user_id,
+                        "seller_id": sold_listing.get("seller_id"),
+                        "amount_inr": amount_inr,
+                        "payment_id": payment_obj_id,
+                        "status": "COMPLETED",
+                        "created_at": now,
+                    }
+                    await db.marketplace_orders.insert_one(order_doc)
 
                 # Notify Seller if different
-                seller_id = listing.get("seller_id")
+                seller_id = sold_listing.get("seller_id")
                 if seller_id and str(seller_id) != str(user_id):
                     await create_notification(
                         db=db,
                         user_id=seller_id,
                         type=NotificationType.MARKETPLACE_ITEM_SOLD,
                         title="Marketplace Item Sold!",
-                        message=f"Your listing '{listing.get('title', 'Item')}' was purchased for ₹{amount_inr:,.2f}.",
+                        message=f"Your listing '{sold_listing.get('title', 'Item')}' was purchased for ₹{amount_inr:,.2f}.",
                         related_entity_type="marketplace_listing",
                         related_entity_id=str(listing_id_obj),
                         action_url="/app/marketplace",
                         event_id=f"sold_{req.payment_id}"
                     )
+            else:
+                logger.warning(
+                    f"Listing {listing_id_obj} could not be marked SOLD (already claimed by another buyer or inactive)."
+                )
         except Exception as exc:
-            logger.error(f"Error fulfilling marketplace listing post-payment: {exc}")
+            logger.error(f"Error fulfilling marketplace listing post-payment: {exc}", exc_info=True)
 
     # Generate PAYMENT_SUCCESS Notification for Buyer
     title_meta = (payment.get("metadata") or {}).get("title_summary", "Item")
@@ -375,7 +391,7 @@ async def verify_payment_signature(
     )
 
     logger.info(f"Payment verified successfully: {payment.get('order_id')} (₹{amount_inr:.2f})")
-    return format_payment_doc(updated_payment or payment)
+    return format_payment_doc(updated_payment)
 
 
 async def handle_razorpay_webhook(
@@ -429,17 +445,61 @@ async def handle_razorpay_webhook(
     now = datetime.now(timezone.utc)
 
     if event_type in ("payment.captured", "order.paid"):
-        if payment.get("status") != PaymentStatus.PAID.value:
-            await db.payments.update_one(
-                {"_id": payment["_id"]},
-                {
-                    "$set": {
-                        "status": PaymentStatus.PAID.value,
-                        "gateway_payment_id": gateway_payment_id,
-                        "paid_at": now,
-                    }
+        updated_payment = await db.payments.find_one_and_update(
+            {
+                "_id": payment["_id"],
+                "status": {"$ne": PaymentStatus.PAID.value}
+            },
+            {
+                "$set": {
+                    "status": PaymentStatus.PAID.value,
+                    "gateway_payment_id": gateway_payment_id,
+                    "paid_at": now,
                 }
-            )
+            },
+            return_document=True
+        )
+
+        if updated_payment:
+            related_type = payment.get("related_entity_type")
+            related_id = payment.get("related_entity_id")
+            amount_inr = float(payment.get("amount_inr", 0.0))
+
+            if related_type in ("marketplace_listing", "listing") and related_id:
+                try:
+                    listing_id_obj = ObjectId(related_id)
+                    sold_listing = await db.marketplace_listings.find_one_and_update(
+                        {
+                            "_id": listing_id_obj,
+                            "status": {"$in": ["ACTIVE", "AVAILABLE", "PUBLISHED"]}
+                        },
+                        {
+                            "$set": {
+                                "status": "SOLD",
+                                "buyer_id": user_id,
+                                "sold_at": now,
+                                "updated_at": now,
+                            }
+                        },
+                        return_document=True
+                    )
+                    if sold_listing:
+                        order_num = f"ORD-{payment.get('order_id')}"
+                        existing_order = await db.marketplace_orders.find_one({"order_number": order_num})
+                        if not existing_order:
+                            await db.marketplace_orders.insert_one({
+                                "order_number": order_num,
+                                "listing_id": listing_id_obj,
+                                "buyer_id": user_id,
+                                "seller_id": sold_listing.get("seller_id"),
+                                "amount_inr": amount_inr,
+                                "payment_id": payment["_id"],
+                                "status": "COMPLETED",
+                                "created_at": now,
+                            })
+                except Exception as exc:
+                    logger.error(f"Webhook marketplace fulfillment error: {exc}", exc_info=True)
+
             await create_notification(
                 db=db,
                 user_id=user_id,
