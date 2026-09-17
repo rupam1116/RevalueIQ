@@ -175,15 +175,19 @@ async def get_user_stats(
     if ewaste_val == 0.0 and total_val_count > 0:
         ewaste_val = round(total_val_count * 0.45, 2)
 
+    has_activity = (total_val_count > 0 or devices_count > 0 or donations_count > 0 or repair_reports_count > 0 or marketplace_listings_count > 0)
     circ_score = p.get("circular_score")
-    if circ_score is None or circ_score == 100 and total_val_count == 0:
-        circ_score = min(100, 75 + (total_val_count * 3) + (donations_count * 5))
+    if not has_activity:
+        circ_score = 0
+        circ_grade = "New"
     else:
-        circ_score = int(circ_score)
-
-    circ_grade = p.get("circular_grade")
-    if not circ_grade:
-        circ_grade = "A+" if circ_score >= 85 else ("A" if circ_score >= 70 else "B")
+        if circ_score is None or circ_score == 0:
+            circ_score = min(100, 75 + (total_val_count * 3) + (donations_count * 5))
+        else:
+            circ_score = int(circ_score)
+        circ_grade = p.get("circular_grade")
+        if not circ_grade or circ_grade == "New":
+            circ_grade = "A+" if circ_score >= 85 else ("A" if circ_score >= 70 else "B")
 
     return {
         "circular_score": circ_score,

@@ -388,8 +388,8 @@ async def get_user_analytics(db: AsyncDatabase, user_id: ObjectId) -> HistoryAna
 
     verified_money = sum(e.value_inr for e in items if e.tier == LifecycleTierEnum.EXTERNALLY_COMPLETED)
 
-    # Truthful circular score: baseline 75, climbs as real actions are taken
-    circular_score = 75
+    # Truthful circular score: 0 for new user, climbs to 75-100 as real actions are taken
+    circular_score = 0
     if total > 0:
         bonus = min(25, (completed_count * 8) + (initiated_count * 3) + (recs_count * 1))
         circular_score = min(100, 75 + bonus)
