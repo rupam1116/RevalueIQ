@@ -48,6 +48,9 @@ async def connect_to_mongo() -> None:
     _mongo_client = AsyncMongoClient(
         settings.MONGODB_URI,
         serverSelectionTimeoutMS=5000,
+        connectTimeoutMS=5000,
+        maxPoolSize=50,
+        minPoolSize=5,
         tlsCAFile=certifi.where()
     )
     _mongo_db = _mongo_client[settings.MONGODB_DATABASE_NAME]
@@ -75,6 +78,9 @@ def get_mongo_client() -> AsyncMongoClient:
         _mongo_client = AsyncMongoClient(
             settings.MONGODB_URI,
             serverSelectionTimeoutMS=5000,
+            connectTimeoutMS=5000,
+            maxPoolSize=50,
+            minPoolSize=5,
             tlsCAFile=certifi.where()
         )
     return _mongo_client

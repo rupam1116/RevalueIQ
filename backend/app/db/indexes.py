@@ -142,6 +142,13 @@ async def create_mongo_indexes(db: AsyncDatabase) -> None:
         await db.user_lifecycle_events.create_index([("user_id", 1), ("type", 1)])
         await db.user_lifecycle_events.create_index([("user_id", 1), ("status", 1)])
 
+        # 18. Collection: user_settings
+        await db.user_settings.create_index("user_id", unique=True)
+
+        # 19. Collection: support_tickets
+        await db.support_tickets.create_index([("user_id", 1), ("created_at", -1)])
+        await db.support_tickets.create_index("status")
+
         logger.info("All approved MongoDB indexes successfully initialized.")
     except Exception as exc:
         logger.warning(f"MongoDB index initialization notice: {exc}")
