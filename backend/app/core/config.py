@@ -57,6 +57,7 @@ class Settings(BaseSettings):
     FIREBASE_CLIENT_EMAIL: str = Field(default="", description="Firebase Service Account Client Email")
     FIREBASE_PRIVATE_KEY: str = Field(default="", description="Firebase Private Key")
     FIREBASE_SERVICE_ACCOUNT_PATH: str = Field(default="secrets/firebase-service-account.json", description="Path to firebase-service-account.json")
+    FIREBASE_SERVICE_ACCOUNT_JSON: str = Field(default="", description="Raw Firebase Service Account JSON string for cloud deployment")
 
     # External AI & Cloud Services (Google GenAI)
     GEMINI_API_KEY: str = Field(default="", description="Google Gemini API Key")

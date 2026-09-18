@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 from pathlib import Path
@@ -38,6 +39,16 @@ def init_firebase() -> bool:
         return True
 
     try:
+        if settings.FIREBASE_SERVICE_ACCOUNT_JSON and settings.FIREBASE_SERVICE_ACCOUNT_JSON.strip():
+            try:
+                raw_json = json.loads(settings.FIREBASE_SERVICE_ACCOUNT_JSON.strip())
+                cred = credentials.Certificate(raw_json)
+                _firebase_app = firebase_admin.initialize_app(cred)
+                logger.info("Firebase Admin SDK initialized from FIREBASE_SERVICE_ACCOUNT_JSON environment variable.")
+                return True
+            except Exception as json_err:
+                logger.error(f"Failed to parse FIREBASE_SERVICE_ACCOUNT_JSON environment variable: {json_err}")
+
         sa_path = _resolve_service_account_path()
         if sa_path and sa_path.exists():
             cred = credentials.Certificate(str(sa_path))
@@ -51,6 +62,7 @@ def init_firebase() -> bool:
                 "project_id": settings.FIREBASE_PROJECT_ID,
                 "private_key": settings.FIREBASE_PRIVATE_KEY.replace("\\n", "\n"),
                 "client_email": settings.FIREBASE_CLIENT_EMAIL,
+                "token_uri": "https://oauth2.googleapis.com/token",
             }
             cred = credentials.Certificate(cred_dict)
             _firebase_app = firebase_admin.initialize_app(cred)
