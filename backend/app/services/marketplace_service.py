@@ -278,34 +278,41 @@ async def create_marketplace_listing(
 
     # 4. Validate and Upload Images to Cloudinary
     stored_images: List[Dict[str, Any]] = []
+    newly_uploaded_public_ids: List[str] = []
     if payload.images:
         if len(payload.images) > 8:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="A maximum of 8 images are allowed per listing."
             )
-        for idx, img in enumerate(payload.images):
-            validate_image_item(img)
-            if img.secure_url and img.public_id and not img.url.startswith("data:"):
-                stored_images.append(img.model_dump())
-            else:
-                uploaded = cloudinary_service.upload_marketplace_image(
-                    image_data=img.url,
-                    user_id=str(user_id),
-                    listing_code=listing_code,
-                    image_index=idx + 1,
-                )
-                stored_images.append({
-                    "url": uploaded["secure_url"],
-                    "secure_url": uploaded["secure_url"],
-                    "public_id": uploaded["public_id"],
-                    "width": uploaded.get("width"),
-                    "height": uploaded.get("height"),
-                    "format": uploaded.get("format"),
-                    "bytes": uploaded.get("bytes"),
-                    "type": img.type or "standard",
-                    "order": img.order if img.order is not None else idx,
-                })
+        try:
+            for idx, img in enumerate(payload.images):
+                validate_image_item(img)
+                if img.secure_url and img.public_id and not img.url.startswith("data:"):
+                    stored_images.append(img.model_dump())
+                else:
+                    uploaded = cloudinary_service.upload_marketplace_image(
+                        image_data=img.url,
+                        user_id=str(user_id),
+                        listing_code=listing_code,
+                        image_index=idx + 1,
+                    )
+                    newly_uploaded_public_ids.append(uploaded["public_id"])
+                    stored_images.append({
+                        "url": uploaded["secure_url"],
+                        "secure_url": uploaded["secure_url"],
+                        "public_id": uploaded["public_id"],
+                        "width": uploaded.get("width"),
+                        "height": uploaded.get("height"),
+                        "format": uploaded.get("format"),
+                        "bytes": uploaded.get("bytes"),
+                        "type": img.type or "standard",
+                        "order": img.order if img.order is not None else idx,
+                    })
+        except Exception:
+            if newly_uploaded_public_ids:
+                cloudinary_service.delete_images(newly_uploaded_public_ids)
+            raise
 
     # 5. Determine Initial Status
     now = datetime.now(timezone.utc)
@@ -315,6 +322,8 @@ async def create_marketplace_listing(
     else:
         # Require at least 1 image to publish
         if not stored_images or len(stored_images) == 0:
+            if newly_uploaded_public_ids:
+                cloudinary_service.delete_images(newly_uploaded_public_ids)
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="At least one photograph is required to publish a listing."
@@ -363,7 +372,12 @@ async def create_marketplace_listing(
         "sold_at": None,
     }
 
-    result = await db.marketplace_listings.insert_one(doc)
+    try:
+        result = await db.marketplace_listings.insert_one(doc)
+    except Exception:
+        if newly_uploaded_public_ids:
+            cloudinary_service.delete_images(newly_uploaded_public_ids)
+        raise
     doc["_id"] = result.inserted_id
     logger.info(f"Created marketplace listing {listing_code} (id={result.inserted_id}) with {len(stored_images)} Cloudinary image(s) for seller {user_id}")
     
@@ -627,45 +641,60 @@ async def update_marketplace_listing(
                 detail="A maximum of 8 images are allowed per listing."
             )
 
-        # 1. Detect removed Cloudinary public_ids and clean them up
-        existing_images = doc.get("images", [])
-        existing_public_ids = {img.get("public_id") for img in existing_images if img.get("public_id")}
-        payload_public_ids = {img.public_id for img in payload.images if img.public_id}
-        orphan_public_ids = list(existing_public_ids - payload_public_ids)
-        if orphan_public_ids:
-            cloudinary_service.delete_images(orphan_public_ids)
-
-        # 2. Upload any new base64/data URI images to Cloudinary
+        # 1. First, validate and upload any new base64/data URI images to Cloudinary
+        newly_uploaded_public_ids: List[str] = []
         updated_stored_images: List[Dict[str, Any]] = []
-        for idx, img in enumerate(payload.images):
-            validate_image_item(img)
-            if img.secure_url and img.public_id and not img.url.startswith("data:"):
-                updated_stored_images.append(img.model_dump())
-            else:
-                uploaded = cloudinary_service.upload_marketplace_image(
-                    image_data=img.url,
-                    user_id=str(user_id),
-                    listing_code=doc.get("listing_code", listing_id),
-                    image_index=idx + 1,
-                )
-                updated_stored_images.append({
-                    "url": uploaded["secure_url"],
-                    "secure_url": uploaded["secure_url"],
-                    "public_id": uploaded["public_id"],
-                    "width": uploaded.get("width"),
-                    "height": uploaded.get("height"),
-                    "format": uploaded.get("format"),
-                    "bytes": uploaded.get("bytes"),
-                    "type": img.type or "standard",
-                    "order": img.order if img.order is not None else idx,
-                })
+        try:
+            for idx, img in enumerate(payload.images):
+                validate_image_item(img)
+                if img.secure_url and img.public_id and not img.url.startswith("data:"):
+                    updated_stored_images.append(img.model_dump())
+                else:
+                    uploaded = cloudinary_service.upload_marketplace_image(
+                        image_data=img.url,
+                        user_id=str(user_id),
+                        listing_code=doc.get("listing_code", listing_id),
+                        image_index=idx + 1,
+                    )
+                    newly_uploaded_public_ids.append(uploaded["public_id"])
+                    updated_stored_images.append({
+                        "url": uploaded["secure_url"],
+                        "secure_url": uploaded["secure_url"],
+                        "public_id": uploaded["public_id"],
+                        "width": uploaded.get("width"),
+                        "height": uploaded.get("height"),
+                        "format": uploaded.get("format"),
+                        "bytes": uploaded.get("bytes"),
+                        "type": img.type or "standard",
+                        "order": img.order if img.order is not None else idx,
+                    })
+        except Exception:
+            if newly_uploaded_public_ids:
+                cloudinary_service.delete_images(newly_uploaded_public_ids)
+            raise
 
         update_fields["images"] = updated_stored_images
 
-    await db.marketplace_listings.update_one(
-        {"_id": obj_id, "seller_id": user_id},
-        {"$set": update_fields}
-    )
+    # 2. Persist update to MongoDB
+    try:
+        await db.marketplace_listings.update_one(
+            {"_id": obj_id, "seller_id": user_id},
+            {"$set": update_fields}
+        )
+    except Exception:
+        # If database update fails, remove newly uploaded assets to preserve consistency
+        if payload.images is not None and newly_uploaded_public_ids:
+            cloudinary_service.delete_images(newly_uploaded_public_ids)
+        raise
+
+    # 3. Only after successful database persistence, clean up old orphan Cloudinary assets
+    if payload.images is not None:
+        existing_images = doc.get("images", [])
+        existing_public_ids = {img.get("public_id") for img in existing_images if img.get("public_id")}
+        updated_public_ids = {img.get("public_id") for img in update_fields.get("images", []) if img.get("public_id")}
+        orphan_public_ids = list(existing_public_ids - updated_public_ids)
+        if orphan_public_ids:
+            cloudinary_service.delete_images(orphan_public_ids)
 
     updated_doc = await db.marketplace_listings.find_one({"_id": obj_id})
     return format_listing_document(updated_doc, user_id)

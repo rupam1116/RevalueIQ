@@ -148,36 +148,49 @@ class CloudinaryService:
             }
         except Exception as err:
             logger.error(f"Cloudinary upload failed for folder='{folder}': {str(err)}", exc_info=True)
+            err_msg = str(err).lower()
+            if "invalid image" in err_msg or "bad request" in err_msg:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid image format or corrupted image payload.",
+                )
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"Failed to upload image to permanent cloud storage: {str(err)}",
+                detail="Failed to upload image to permanent cloud storage.",
             )
 
     def delete_image(self, public_id: str) -> bool:
         """
         Deletes a single image from Cloudinary by its public_id.
+        Enforces namespace restriction to prevent arbitrary deletion.
         """
-        if not public_id:
+        if not public_id or not isinstance(public_id, str):
+            return False
+
+        clean_pid = public_id.strip()
+        if not clean_pid.startswith("revalueiq/"):
+            logger.warning(f"Rejected attempt to delete public_id outside revalueiq namespace: '{clean_pid}'")
             return False
 
         import os
         if not self._configured or os.getenv("PYTEST_CURRENT_TEST"):
-            logger.info(f"Simulating Cloudinary deletion for public_id='{public_id}'")
+            logger.info(f"Simulating Cloudinary deletion for public_id='{clean_pid}'")
             return True
 
         try:
-            result = cloudinary.uploader.destroy(public_id, invalidate=True)
-            logger.info(f"Cloudinary destroy result for public_id='{public_id}': {result}")
+            result = cloudinary.uploader.destroy(clean_pid, invalidate=True)
+            logger.info(f"Cloudinary destroy result for public_id='{clean_pid}': {result}")
             return result.get("result") in ("ok", "not found")
         except Exception as err:
-            logger.error(f"Failed to delete Cloudinary asset public_id='{public_id}': {str(err)}", exc_info=True)
+            logger.error(f"Failed to delete Cloudinary asset public_id='{clean_pid}': {str(err)}", exc_info=True)
             return False
 
     def delete_images(self, public_ids: List[str]) -> bool:
         """
         Bulk deletes multiple images from Cloudinary.
+        Enforces namespace restriction on all public IDs.
         """
-        valid_ids = [p for p in public_ids if p and isinstance(p, str)]
+        valid_ids = [p.strip() for p in public_ids if p and isinstance(p, str) and p.strip().startswith("revalueiq/")]
         if not valid_ids:
             return True
 
