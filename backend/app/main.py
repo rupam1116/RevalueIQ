@@ -68,6 +68,27 @@ def create_application() -> FastAPI:
     # 6. Mount API v1 Routers
     app.include_router(api_v1_router, prefix="/api/v1")
 
+    # 7. Root Probe and Lightweight Health Check for Render
+    @app.get("/", tags=["Health & System Verification"])
+    async def root():
+        """Root application probe for uptime monitoring."""
+        return {
+            "service": settings.PROJECT_NAME,
+            "version": settings.VERSION,
+            "status": "online",
+            "docs_url": "/docs",
+            "health_url": "/health",
+            "api_v1_health": "/api/v1/health",
+        }
+
+    @app.get("/health", tags=["Health & System Verification"])
+    async def root_health_check():
+        """Lightweight root health check for load balancers and Render."""
+        return {
+            "status": "ok",
+            "service": settings.PROJECT_NAME,
+        }
+
     return app
 
 
