@@ -48,9 +48,9 @@ async def get_repair_centers_list(
     city: Optional[str] = Query(None, description="Filter by city (e.g. Hyderabad, Bengaluru, Mumbai)"),
     area: Optional[str] = Query(None, description="Filter by locality or neighborhood"),
     postal_code: Optional[str] = Query(None, description="Filter by postal PIN code"),
-    latitude: Optional[float] = Query(None, description="User GPS latitude for distance sorting"),
-    longitude: Optional[float] = Query(None, description="User GPS longitude for distance sorting"),
-    radius: Optional[float] = Query(None, description="Maximum radius in kilometers"),
+    latitude: Optional[float] = Query(None, ge=-90.0, le=90.0, description="User GPS latitude for distance sorting"),
+    longitude: Optional[float] = Query(None, ge=-180.0, le=180.0, description="User GPS longitude for distance sorting"),
+    radius: Optional[float] = Query(None, ge=0.1, le=500.0, description="Maximum radius in kilometers"),
     verified_only: bool = Query(False, description="Filter only verified partner centers"),
     provider: Optional[str] = Query(None, description="Explicit provider: 'osm' or 'google' (defaults to system setting)"),
     page: int = Query(1, ge=1, description="Page number"),
@@ -162,10 +162,10 @@ async def recommend_repair_centers(
     description="Calculates live driving directions, distance in km, duration in minutes, and GeoJSON polyline using OSRM or Google."
 )
 async def calculate_route(
-    user_lat: float = Query(..., description="Origin latitude"),
-    user_lon: float = Query(..., description="Origin longitude"),
-    dest_lat: float = Query(..., description="Destination latitude"),
-    dest_lon: float = Query(..., description="Destination longitude"),
+    user_lat: float = Query(..., ge=-90.0, le=90.0, description="Origin latitude"),
+    user_lon: float = Query(..., ge=-180.0, le=180.0, description="Origin longitude"),
+    dest_lat: float = Query(..., ge=-90.0, le=90.0, description="Destination latitude"),
+    dest_lon: float = Query(..., ge=-180.0, le=180.0, description="Destination longitude"),
     provider: Optional[str] = Query(None, description="Routing provider: 'osm' or 'google'")
 ) -> RouteResponse:
     """

@@ -215,17 +215,8 @@ class OSMRepairCenterProvider(BaseRepairCenterProvider):
         except Exception as exc:
             logger.warning(f"OSRM route calculation notice: {exc}")
 
-        # Fallback simple line calculation if OSRM mirror is momentarily unreachable
-        return {
-            "distance_km": round(((lat2 - lat1)**2 + (lon2 - lon1)**2)**0.5 * 111.0, 2),
-            "duration_minutes": 15.0,
-            "geometry": {
-                "type": "LineString",
-                "coordinates": [[lon1, lat1], [lon2, lat2]]
-            },
-            "summary": "Direct Route",
-            "provider": "osrm_fallback"
-        }
+        # Fail gracefully without fabricating route or travel duration
+        return None
 
     def normalize_place(
         self,

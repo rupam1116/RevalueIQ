@@ -18,12 +18,12 @@ class RepairContextRequest(BaseModel):
 
 
 class LocationContextRequest(BaseModel):
-    latitude: Optional[float] = Field(None, description="User GPS latitude")
-    longitude: Optional[float] = Field(None, description="User GPS longitude")
+    latitude: Optional[float] = Field(None, ge=-90.0, le=90.0, description="User GPS latitude")
+    longitude: Optional[float] = Field(None, ge=-180.0, le=180.0, description="User GPS longitude")
     city: Optional[str] = Field(None, description="City name e.g. Hyderabad, Bengaluru")
     area: Optional[str] = Field(None, description="Area or neighborhood")
     postal_code: Optional[str] = Field(None, description="Postal/PIN code")
-    radius_km: Optional[float] = Field(50.0, description="Max search radius in kilometers (default: 50km)")
+    radius_km: Optional[float] = Field(50.0, ge=0.1, le=500.0, description="Max search radius in kilometers (default: 50km)")
 
 
 class RepairRecommendationRequest(BaseModel):

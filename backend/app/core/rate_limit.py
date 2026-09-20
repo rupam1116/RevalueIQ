@@ -80,6 +80,13 @@ SENSITIVE_LIMITS = [
     ("/api/v1/marketplace/listings", "POST", 30),
     ("/api/v1/account/delete", "POST", 10),
     ("/api/v1/account/export", "GET", 10),
+    # Map & Location Services (protect against proxy abuse of upstream OSM/Nominatim/Overpass/OSRM)
+    ("/api/v1/repair-centers/route", "GET", 30),
+    ("/api/v1/repair-centers/recommend", "POST", 30),
+    ("/api/v1/repair-centers", "GET", 60),
+    ("/api/v1/donation-organizations/route", "GET", 30),
+    ("/api/v1/donation-organizations/recommend", "POST", 30),
+    ("/api/v1/donation-organizations", "GET", 60),
 ]
 
 DEFAULT_API_LIMIT = 180  # Default requests per minute for general endpoints

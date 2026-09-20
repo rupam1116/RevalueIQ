@@ -43,9 +43,9 @@ async def get_donation_organizations(
     city: Optional[str] = Query(None, description="City name (e.g. Hyderabad, Bengaluru)"),
     area: Optional[str] = Query(None, description="Locality / Neighborhood (e.g. Madhapur, Gachibowli)"),
     postal_code: Optional[str] = Query(None, description="Postal / PIN code (e.g. 500081)"),
-    latitude: Optional[float] = Query(None, description="User GPS latitude for distance sorting"),
-    longitude: Optional[float] = Query(None, description="User GPS longitude for distance sorting"),
-    radius: Optional[float] = Query(None, description="Search radius in kilometers"),
+    latitude: Optional[float] = Query(None, ge=-90.0, le=90.0, description="User GPS latitude for distance sorting"),
+    longitude: Optional[float] = Query(None, ge=-180.0, le=180.0, description="User GPS longitude for distance sorting"),
+    radius: Optional[float] = Query(None, ge=0.1, le=500.0, description="Search radius in kilometers"),
     provider: Optional[str] = Query(None, description="Provider identifier: 'osm' or 'google'"),
     page: int = Query(1, ge=1, description="Page number"),
     limit: int = Query(20, ge=1, le=100, description="Items per page"),
@@ -125,10 +125,10 @@ async def search_donation_organizations_endpoint(
     summary="Nearby Donation Organizations by Coordinates"
 )
 async def get_nearby_donation_organizations(
-    latitude: float = Query(..., description="GPS Latitude"),
-    longitude: float = Query(..., description="GPS Longitude"),
+    latitude: float = Query(..., ge=-90.0, le=90.0, description="GPS Latitude"),
+    longitude: float = Query(..., ge=-180.0, le=180.0, description="GPS Longitude"),
     category: Optional[str] = Query(None, description="Category filter"),
-    radius: Optional[float] = Query(25.0, description="Radius in km"),
+    radius: Optional[float] = Query(25.0, ge=0.1, le=500.0, description="Radius in km"),
     limit: int = Query(20, ge=1, le=100),
     db: AsyncDatabase = Depends(get_db)
 ) -> DonationOrganizationListResponse:
@@ -197,10 +197,10 @@ async def recommend_donation_organizations(
     description="Calculates turn-by-turn route, driving distance in km, duration in minutes, and GeoJSON polyline geometry."
 )
 async def get_route_to_organization(
-    lat1: float = Query(..., description="Origin latitude (e.g. user GPS)"),
-    lon1: float = Query(..., description="Origin longitude (e.g. user GPS)"),
-    lat2: float = Query(..., description="Destination organization latitude"),
-    lon2: float = Query(..., description="Destination organization longitude"),
+    lat1: float = Query(..., ge=-90.0, le=90.0, description="Origin latitude (e.g. user GPS)"),
+    lon1: float = Query(..., ge=-180.0, le=180.0, description="Origin longitude (e.g. user GPS)"),
+    lat2: float = Query(..., ge=-90.0, le=90.0, description="Destination organization latitude"),
+    lon2: float = Query(..., ge=-180.0, le=180.0, description="Destination organization longitude"),
     provider: Optional[str] = Query(None, description="Routing provider override")
 ) -> DonationRouteResponse:
     """
