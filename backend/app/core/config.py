@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     PORT: int = 8000
 
     # CORS Settings
-    FRONTEND_URL: Union[str, List[str]] = "http://localhost:3000,http://127.0.0.1:3000"
+    FRONTEND_URL: Union[str, List[str]] = "https://revalueiq.vercel.app,http://localhost:3000,http://127.0.0.1:3000"
 
     @property
     def cors_origins(self) -> List[str]:
@@ -26,6 +26,14 @@ class Settings(BaseSettings):
             origins = [origin.strip().rstrip("/") for origin in self.FRONTEND_URL.split(",") if origin.strip()]
         else:
             origins = ["http://localhost:3000"]
+        default_origins = [
+            "https://revalueiq.vercel.app",
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+        ]
+        for d in default_origins:
+            if d not in origins:
+                origins.append(d)
         return origins
 
     # MongoDB Atlas Settings

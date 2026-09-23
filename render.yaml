@@ -45,4 +45,4 @@ services:
       - key: REPAIR_MAP_PROVIDER
         value: osm
       - key: FRONTEND_URL
-        value: http://localhost:3000,http://127.0.0.1:3000
+        value: https://revalueiq.vercel.app,http://localhost:3000,http://127.0.0.1:3000
