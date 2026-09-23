@@ -1,6 +1,7 @@
 import logging
 from typing import Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, status
+from pymongo.asynchronous.database import AsyncDatabase
 from pymongo.errors import PyMongoError
 
 from app.api.deps import get_db, get_current_user, get_current_user_claims, AuthenticatedUser
