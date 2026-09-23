@@ -43,6 +43,11 @@ def build_profile_dict(user_doc: Dict[str, Any], profile_doc: Optional[Dict[str,
             "twitter": social.get("twitter", ""),
             "website": social.get("website", ""),
         },
+        "eco_plan": p.get("eco_plan") or user_doc.get("eco_plan") or "free",
+        "eco_plan_name": p.get("eco_plan_name") or user_doc.get("eco_plan_name") or "Eco Starter",
+        "eco_plan_status": p.get("eco_plan_status") or "active",
+        "eco_plan_billing_cycle": p.get("eco_plan_billing_cycle") or "monthly",
+        "eco_plan_expires_at": p.get("eco_plan_expires_at"),
         "created_at": user_doc.get("created_at"),
         "updated_at": user_doc.get("updated_at"),
     }
@@ -189,6 +194,25 @@ async def get_user_stats(
         if not circ_grade or circ_grade == "New":
             circ_grade = "A+" if circ_score >= 85 else ("A" if circ_score >= 70 else "B")
 
+    # Eco plan & valuation limit computation
+    eco_tier = str(p.get("eco_plan") or "free").lower()
+    eco_tier_names = {
+        "free": "Eco Starter",
+        "pro": "Eco Pro (Circular Pioneer)",
+        "enterprise": "Circular Enterprise (Net-Zero Leader)",
+    }
+    eco_tier_name = p.get("eco_plan_name") or eco_tier_names.get(eco_tier, "Eco Starter")
+    eco_status = p.get("eco_plan_status") or "active"
+    eco_exp = p.get("eco_plan_expires_at")
+    monthly_limit = 5 if eco_tier == "free" else -1
+
+    now_utc = datetime.now(timezone.utc)
+    start_of_month = datetime(now_utc.year, now_utc.month, 1, tzinfo=timezone.utc)
+    monthly_used = await db.device_valuations.count_documents({
+        "user_id": user_id,
+        "created_at": {"$gte": start_of_month}
+    })
+
     return {
         "circular_score": circ_score,
         "circular_grade": circ_grade,
@@ -204,5 +228,11 @@ async def get_user_stats(
         "portfolio_value": round(portfolio_val, 2),
         "repair_savings": round(repair_savings, 2),
         "grade_a_percentage": grade_a_pct,
+        "eco_plan": eco_tier,
+        "eco_plan_name": eco_tier_name,
+        "eco_plan_status": eco_status,
+        "eco_plan_expires_at": eco_exp,
+        "monthly_valuations_limit": monthly_limit,
+        "monthly_valuations_used": monthly_used,
     }
 

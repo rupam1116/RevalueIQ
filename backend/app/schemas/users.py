@@ -33,6 +33,11 @@ class UserProfileResponse(BaseModel):
     language: Optional[str] = Field(default="English (US)", description="User primary language")
     timezone: Optional[str] = Field(default="Asia/Kolkata", description="User IANA timezone")
     social_links: Optional[SocialLinksSchema] = Field(default_factory=SocialLinksSchema)
+    eco_plan: str = Field(default="free", description="Current eco tier: free, pro, enterprise")
+    eco_plan_name: str = Field(default="Eco Starter", description="Display name of tier")
+    eco_plan_status: str = Field(default="active", description="Status: active, cancelled, expired")
+    eco_plan_billing_cycle: str = Field(default="monthly", description="Billing frequency: monthly, yearly")
+    eco_plan_expires_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -66,4 +71,10 @@ class UserStatsResponse(BaseModel):
     portfolio_value: float = Field(default=0.0, description="Total estimated resale value of user's devices in INR")
     repair_savings: float = Field(default=0.0, description="Total estimated repair savings in INR")
     grade_a_percentage: float = Field(default=100.0, description="Percentage of appraised devices with Grade A or A+")
+    eco_plan: str = Field(default="free", description="Current eco tier: free, pro, enterprise")
+    eco_plan_name: str = Field(default="Eco Starter", description="Display name of tier")
+    eco_plan_status: str = Field(default="active", description="Status: active, cancelled, expired")
+    eco_plan_expires_at: Optional[datetime] = None
+    monthly_valuations_limit: int = Field(default=5, description="Allowed AI appraisals this month (-1 = unlimited)")
+    monthly_valuations_used: int = Field(default=0, description="AI appraisals used this month")
 
