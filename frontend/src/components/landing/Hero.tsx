@@ -217,12 +217,13 @@ export default function LandingHero() {
             </button>
 
             <video
-              src="/revalueiq.mp4"
               controls
               autoPlay
               playsInline
-              className="w-full h-full object-cover rounded-2xl"
+              preload="auto"
+              className="w-full h-full object-contain rounded-2xl bg-black"
             >
+              <source src="/revalueiq.mp4" type="video/mp4" />
               Your browser does not support HTML5 video playback.
             </video>
           </div>

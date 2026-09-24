@@ -53,7 +53,9 @@ dev.db
 
 /src/generated/prisma
 
-# Large media assets / promo videos
+# Large media assets / promo videos (allow public demo video)
 *.mp4
+!public/*.mp4
+!public/revalueiq.mp4
 
 
